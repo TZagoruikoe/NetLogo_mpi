@@ -5,88 +5,115 @@
 #define min(a,b) (a < b ? a : b)
 
 double frand() { // вещественное случайное число в диапазоне [0,1)
-	return double(rand()) / RAND_MAX;
+    return double(rand()) / RAND_MAX;
 }
-
+/*
 int eval(int* a, int n) {
 	int sum = 0;
 	for (int i = 0; i < n; i++)
 		sum += a[i];
 	return sum;
 }
-
-void init(int* P, int m, int n) {
-	for (int k = 0; k < m; k++)
-		for (int i = 0; i < n; i++)
-			P[k * n + i] = rand() % 2;
+*/
+double sphere(double *a, int n, int offset) {
+    double sum = 0;
+    for(int i = 0 ; i < n; ++i) {
+        sum += pow(a[n * offset + i],2);
+    }
+    return sum;
 }
 
-void shuffle(int* P, int m, int n) {
-	for( int k = 0; k < m; k++ ) {
-		int l = rand() % m;
-		for(int i = 0; i < n; i++)
-			std::swap(P[k * n + i], P[l * n + i]);
-	}
+double Rozenbrok(double *a, int n, int offset) {
+    double sum = 0;
+    for(int i = 0 ; i < n - 1; ++i) {
+        sum += 100 * pow(pow(a[n * offset + i],2) - a[offset * n + i + 1],2) + pow(a[offset * n + i] - 1,2);
+    }
+    return sum;
 }
 
-void select(int* P, int m, int n) {
-	double pwin = 0.95;
-	shuffle(P, m, n);
-	for(int k = 0; k < m / 2; k++) {
-		int a = 2 * k;
-		int b = 2 * k + 1;
-		int fa = eval(P + a * n, n);
-		int fb = eval(P + b * n, n);
-		double p = frand();
-		if ((fa < fb && p < pwin) || (fa > fb && p > pwin))
-			for (int i = 0; i < n; i++)
-				P[b * n + i] = P[a * n + i];
-		else
-			for (int i = 0; i < n; i++)
-				P[a * n + i] = P[b * n + i];
-	}
+double Rastrigin(double *a, int n, int offset) {
+    double sum = 0;
+    for(int i = 0 ; i < n; ++i) {
+        sum += pow(a[n * offset + i],2) - 10 * cos(2 * 180 * i)  + 10;
+    }
+    return sum;
 }
 
-void crossover(int* P, int m, int n) {
-	shuffle(P, m, n);
-	for (int k = 0; k < m / 2; k++) {
-		int a = 2 * k;
-		int b = 2 * k + 1;
-		int j = rand() % n;
-		for (int i = j; i < n; i++)
-			std::swap(P[a * n + i], P[b * n + i]);
-	}
+void init(double* P, int m, int n) {
+    for (int k = 0; k < m; k++)
+        for (int i = 0; i < n; i++)
+            P[k * n + i] = rand() % 2;
 }
 
-void mutate(int* P, int m, int n) {
-	double pmut = 0.001;
-	for (int k = 0; k < m; k++)
-		for (int i = 0; i < n; i++)
-			if (frand() < pmut)
-				P[k * n + i] = 1 - P[k * n + i];
-}
-
-void printthebest(int* P, int m, int n, int rank, int size) {
-	int sum = 0;
-
-	//int k0 = -1;
-	int f0 = 1000000000;
-	for (int k = 0; k < m; k++) {
-		int f = eval(P + k * n, n);
-		if (f < f0) {
-			f0 = f;
-			//k0 = k;
-		}
-	}
-
-    MPI_Allreduce(&f0, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-
-    if (rank == 0) {
-		std::cout << " Dependence of the average error: " << sum / size << std::endl;
+void shuffle(double* P, int m, int n) {
+    for( int k = 0; k < m; k++ ) {
+        int l = rand() % m;
+        for(int i = 0; i < n; i++)
+            std::swap(P[k * n + i], P[l * n + i]);
     }
 }
 
-void migrate(int* P, int m, int n, int people, int* buf_tmp, int rank, int size) {
+void select(double* P, int m, int n) {
+    double pwin = 0.95;
+    shuffle(P, m, n);
+    for(int k = 0; k < m / 2; k++) {
+        int a = 2 * k;
+        int b = 2 * k + 1;
+
+        double fa = sphere(P, n, a);
+        double fb = sphere(P, n, b);
+
+        double p = frand();
+        if ((fa < fb && p < pwin) || (fa > fb && p > pwin))
+            for (int i = 0; i < n; i++)
+                P[b * n + i] = P[a * n + i];
+        else
+            for (int i = 0; i < n; i++)
+                P[a * n + i] = P[b * n + i];
+    }
+}
+
+void crossover(double* P, int m, int n) {
+    shuffle(P, m, n);
+    for (int k = 0; k < m / 2; k++) {
+        int a = 2 * k;
+        int b = 2 * k + 1;
+        int j = rand() % n;
+        for (int i = j; i < n; i++)
+            std::swap(P[a * n + i], P[b * n + i]);
+    }
+}
+
+void mutate(double* P, int m, int n) {
+    double pmut = 0.001;
+    for (int k = 0; k < m; k++)
+        for (int i = 0; i < n; i++)
+            if (frand() < pmut)
+                P[k * n + i] = 1 - P[k * n + i];
+}
+
+void printthebest(double* P, int m, int n, int rank, int size) {
+    double sum = 0.;
+    double best = 0.;
+
+    double f0 = 10000000000;
+    for (int k = 0; k < m; k++) {
+        double f = sphere(P, n, k);
+        if (f < f0) {
+            f0 = f;
+        }
+    }
+
+    MPI_Allreduce(&f0, &sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&f0, &best, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        std::cout << " Best: " << best << std::endl;
+        std::cout << "Dependence of the average error: " << sum / size << std::endl;
+    }
+}
+
+void migrate(double* P, int m, int n, int people, int* buf_tmp, int rank, int size) {
     shuffle(P, m, n);
     MPI_Request request[4];
 
@@ -114,23 +141,23 @@ void runGA(int n, int m, int T, int people, int dt, int rank, int size) {
 
     int* buf_tmp = new int[2 * people * n];
 
-	int* P = new int[diff * n];
-	init(P, diff, n);
-	for (int t = 0; t < T; t++) {
+    double* P = new double[diff * n];
+    init(P, diff, n);
+    for (int t = 0; t < T; t++) {
         if (t % dt == 0) {
             migrate(P, diff, n, people, buf_tmp, rank, size);
         }
-		select(P, diff, n);
-		crossover(P, diff, n);
-		mutate(P, diff, n);
-		if (rank == 0)
-		    std::cout << "Iter --> " << t;
-		printthebest(P, diff, n, rank, size);
-	}
+        select(P, diff, n);
+        crossover(P, diff, n);
+        mutate(P, diff, n);
+        if (rank == 0)
+            std::cout << "Iter --> " << t;
+        printthebest(P, diff, n, rank, size);
+    }
 
     delete[] range;
     delete[] buf_tmp;
-	delete[] P;
+    delete[] P;
 }
 
 int main(int argc, char** argv) {
@@ -141,14 +168,14 @@ int main(int argc, char** argv) {
 
     srand(rank);
 
-	int n = 1000; // atoi(argv[1]);
-	int m = 2000; // atoi(argv[2]);
-	int T = 100; // atoi(argv[3]);
-    int people = 100; // atoi(argv[4]);
-    int dt = 3; // atoi(argv[5]);
+    int n = atoi(argv[1]);      // 20
+    int m = atoi(argv[2]);      // 40
+    int T = atoi(argv[3]);      // 20
+    int people = atoi(argv[4]); // 5
+    int dt = atoi(argv[5]);     // 3
 
-	runGA(n, m, T, people, dt, rank, size);
+    runGA(n, m, T, people, dt, rank, size);
 
     MPI_Finalize();
-	return 0;
+    return 0;
 }
